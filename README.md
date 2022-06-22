@@ -110,45 +110,51 @@ In this example the whole message is validated as follows:
 
 ```csharp
 [AllowAnonymous]
-        [HttpPost("authenticate")]
-        public async Task<IActionResult> Authenticate(AuthenticateRequest authenticateRequest)
+[HttpPost("authenticate")]
+public async Task<IActionResult> Authenticate(AuthenticateRequest authenticateRequest)
+{
+    var siweMessage = SiweMessageParser.Parse(authenticateRequest.SiweEncodedMessage);
+    var signature = authenticateRequest.Signature;
+    var validUser = await _siweMessageService.IsUserAddressRegistered(siweMessage);
+    if (validUser)
+    {
+        if (await _siweMessageService.IsMessageSignatureValid(siweMessage, signature))
         {
-            var siweMessage = SiweMessageParser.Parse(authenticateRequest.SiweEncodedMessage);
-            var signature = authenticateRequest.Signature;
-            var validUser = await _siweMessageService.IsUserAddressRegistered(siweMessage);
-            if (validUser)
+            if (_siweMessageService.IsMessageTheSameAsSessionStored(siweMessage))
             {
-                if (await _siweMessageService.IsMessageSignatureValid(siweMessage, signature))
+                if (_siweMessageService.HasMessageDateStartedAndNotExpired(siweMessage))
                 {
-                    if (_siweMessageService.IsMessageTheSameAsSessionStored(siweMessage))
+                    var token = _siweJwtAuthorisationService.GenerateToken(siweMessage, signature);
+                    return Ok(new AuthenticateResponse
                     {
-                        if (_siweMessageService.HasMessageDateStartedAndNotExpired(siweMessage))
-                        {
-                            var token = _siweJwtAuthorisationService.GenerateToken(siweMessage, signature);
-                            return Ok(new AuthenticateResponse
-                            {
-                                Address = siweMessage.Address,
-                                Jwt = token
-                            });
-                        }
-                        ModelState.AddModelError("Unauthorized", "Expired token");
-                        return Unauthorized(ModelState);
-                    }
-                    ModelState.AddModelError("Unauthorized", "Matching Siwe message with nonce not found");
-                    return Unauthorized(ModelState);
+                        Address = siweMessage.Address,
+                        Jwt = token
+                    });
                 }
-                ModelState.AddModelError("Unauthorized", "Invalid Signature");
+                ModelState.AddModelError("Unauthorized", "Expired token");
                 return Unauthorized(ModelState);
             }
-
-            ModelState.AddModelError("Unauthorized", "Invalid User");
+            ModelState.AddModelError("Unauthorized", "Matching Siwe message with nonce not found");
             return Unauthorized(ModelState);
         }
+        ModelState.AddModelError("Unauthorized", "Invalid Signature");
+        return Unauthorized(ModelState);
+    }
+
+    ModelState.AddModelError("Unauthorized", "Invalid User");
+    return Unauthorized(ModelState);
+}
 
 ```
-The first check validates the user using Nethereum IUserService ``` var validUser = await _siweMessageService.IsUserAddressRegistered(siweMessage);```.
+
+### IUserService
+The first check validates the user is registered (or valid) using Nethereum IUserService ``` var validUser = await _siweMessageService.IsUserAddressRegistered(siweMessage);```.
 Your user service can validate the user is a registered user in a smart contract or internal database.
 Nethereum provides a preset ERC721BalanceEthereumUserService, that validates that the user has an ERC721 token (NFT balance) https://github.com/Nethereum/Nethereum/blob/master/src/Nethereum.Siwe/UserServices/ERC721BalanceEthereumUserService.cs
+
+## Creation of a JWT Token
+
+
 
 
 
