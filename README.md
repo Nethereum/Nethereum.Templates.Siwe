@@ -106,7 +106,7 @@ public IActionResult GenerateNewSiweMessage([FromBody] string address)
 
 ## Authenticating a User
 To authentication a user, the signed message will be sent to the Rest API. 
-The whole message need to be validated, 
+In this example the whole message is validated as follows:
 
 ```csharp
 [AllowAnonymous]
@@ -146,3 +146,11 @@ The whole message need to be validated,
         }
 
 ```
+The first check validates the user using Nethereum IUserService ``` var validUser = await _siweMessageService.IsUserAddressRegistered(siweMessage);```.
+Your user service can validate the user is a registered user in a smart contract or internal database.
+Nethereum provides a preset ERC721BalanceEthereumUserService, that validates that the user has an ERC721 token (NFT balance) https://github.com/Nethereum/Nethereum/blob/master/src/Nethereum.Siwe/UserServices/ERC721BalanceEthereumUserService.cs
+
+
+
+
+
