@@ -8,6 +8,8 @@ The templates provides the following use cases, and how SIWE can be implemented 
 + Maui (Future template with Rest Api)
 + Avalonia (Future template with Rest Api)
 
+![Siwe Nethereum](screenshots/demoAuthentication.gif)
+
 ## SIWE Message, signing and recovery (Overall process)
 
 A SIWE Message is a standard message that a user signs with their private key, the message is presented in plain text to the user. The message contains different attributes including the Domain, Address, Uri, Expiry etc. The issuer of the message can authenticate the signer (user), by matching the recovered address from the signed message to their user records. To prevent replay attacks a unique nonce (random value) is created for each session.
