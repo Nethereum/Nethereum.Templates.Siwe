@@ -422,5 +422,6 @@ public async override Task<AuthenticationState> GetAuthenticationStateAsync()
         }
 ```
 
-# MAUI and Avalonia examples TBD
+### MAUI and Avalonia examples 
+Authentication for Maui and Avalonia will be the similar to Wasm using the Rest Api and SecuredStorage. If using an standalone application, the Blazor Hybrid or Avalonia Desktop as an starting point until having a specific example.
 
