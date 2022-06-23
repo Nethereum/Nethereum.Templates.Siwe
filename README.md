@@ -357,7 +357,7 @@ An example on how to use the Claims in Blazor is the following, in which restric
         </AuthorizeView>
 ```
 Or remove a link from the navigation
-```
+```xml
 <div class="@NavMenuCssClass" @onclick="ToggleNavMenu">
     <ul class="nav flex-column">
         <li class="nav-item px-3">
@@ -380,7 +380,7 @@ Or remove a link from the navigation
 The Blazor server side, it is much simpler as we don't require a RestApi for authentication, everything is part of the same application.
 The SiweAuthenticationServerStateProvider is responsible to orchestrate now with the NethereumSiweAuthenticatorService, which is part of the Nethereum.UI https://github.com/Nethereum/Nethereum/blob/master/src/Nethereum.UI/NethereumSiweAuthenticatorService.cs
 
-```
+```csharp
      public async Task AuthenticateAsync(string address = null)
         {
             
