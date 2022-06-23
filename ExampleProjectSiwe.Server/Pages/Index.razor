@@ -141,14 +141,15 @@
                 await GetChainId();
             }
 
-            var authState = await AuthenticationState; ;
-            if (authState != null)
-            {
-                UserName = authState.User.FindFirst(c => c.Type.Contains(ClaimTypes.Name))?.Value;
-            }
-            this.StateHasChanged();
+          
         }
 
+        var authState = await AuthenticationState;
+        if (authState != null && authState.User.Identity.IsAuthenticated)
+        {
+            UserName = authState.User.FindFirst(c => c.Type.Contains(ClaimTypes.Name))?.Value;
+        }
+        this.StateHasChanged();
 
     }
 

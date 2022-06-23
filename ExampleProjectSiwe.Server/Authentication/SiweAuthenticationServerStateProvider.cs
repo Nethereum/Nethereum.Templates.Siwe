@@ -7,6 +7,7 @@ using Nethereum.UI;
 using Nethereum.Util;
 using Nethereum.Blazor;
 using ExampleProjectSiwe.Server.Services;
+using Nethereum.Siwe;
 
 namespace ExampleProjectSiwe.Server.Authentication
 {
@@ -15,18 +16,21 @@ namespace ExampleProjectSiwe.Server.Authentication
         private readonly NethereumSiweAuthenticatorService nethereumSiweAuthenticatorService;
         private readonly IAccessTokenService _accessTokenService;
         private readonly IUserService<TUser> _userService;
+        private readonly SiweMessageService _siweMessageService;
 
         public SiweAuthenticationServerStateProvider(NethereumSiweAuthenticatorService nethereumSiweAuthenticatorService,
-            IAccessTokenService accessTokenService, SelectedEthereumHostProviderService selectedHostProviderService, IUserService<TUser> userService) : base(selectedHostProviderService)
+            IAccessTokenService accessTokenService, SelectedEthereumHostProviderService selectedHostProviderService, IUserService<TUser> userService, ISessionStorage sessionStorage) : base(selectedHostProviderService)
         {
 
             this.nethereumSiweAuthenticatorService = nethereumSiweAuthenticatorService;
             _accessTokenService = accessTokenService;
             _userService = userService;
+            _siweMessageService = new SiweMessageService(sessionStorage);
         }
 
         public async override Task<AuthenticationState> GetAuthenticationStateAsync()
         {
+            //doing validation when retrieving the user
             var currentUser = await GetUserAsync();
 
             if (currentUser != null && currentUser.EthereumAddress != null)
@@ -52,7 +56,7 @@ namespace ExampleProjectSiwe.Server.Authentication
             }
             var siweMessage = new DefaultSiweMessage();
             siweMessage.Address = address.ConvertToEthereumChecksumAddress();
-            siweMessage.SetExpirationTime(DateTime.Now.AddMinutes(10));
+            siweMessage.SetExpirationTime(DateTime.Now.AddMinutes(10)); 
             siweMessage.SetNotBefore(DateTime.Now);
             var fullMessage = await nethereumSiweAuthenticatorService.AuthenticateAsync(siweMessage);
             await _accessTokenService.SetAccessTokenAsync(SiweMessageStringBuilder.BuildMessage(fullMessage));
@@ -91,7 +95,18 @@ namespace ExampleProjectSiwe.Server.Authentication
             var token = await _accessTokenService.GetAccessTokenAsync();
             if (token == null) return null;
             var siweMessage = SiweMessageParser.Parse(token);
-            return await _userService.GetUserAsync(siweMessage.Address);
+            if (_siweMessageService.IsMessageTheSameAsSessionStored(siweMessage))
+            {
+                if (_siweMessageService.HasMessageDateStartedAndNotExpired(siweMessage))
+                {
+                    if (await _siweMessageService.IsUserAddressRegistered(siweMessage))
+                    {
+                        //add other checks here
+                        return await _userService.GetUserAsync(siweMessage.Address);
+                    }
+                }
+            }
+            return null;
         }
 
         private ClaimsPrincipal GenerateSiweClaimsPrincipal(User currentUser)
