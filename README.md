@@ -152,11 +152,122 @@ The first check validates the user is registered (or valid) using Nethereum IUse
 Your user service can validate the user is a registered user in a smart contract or internal database.
 Nethereum provides a preset ERC721BalanceEthereumUserService, that validates that the user has an ERC721 token (NFT balance) https://github.com/Nethereum/Nethereum/blob/master/src/Nethereum.Siwe/UserServices/ERC721BalanceEthereumUserService.cs
 
-## Creation of a JWT Token
+### Creation of a JWT
+To enable the reusability of other JWT middleware we create a JWT that stores the values of the SIWE message and uses the same expiration, issuance, etc of the SiweMessage.
+
+DateTimes are stored for both SIWE and the JWT due to precission issues on milliseconds. JWT are defaulted to 0, so we won't be able to recreate the message to validate the signature.
+
+```csharp
+ public string GenerateToken(SiweMessage siweMessage, string signature)
+        {
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var key = Encoding.ASCII.GetBytes(_appSettings.Secret);
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(new[] {
+                                                     new Claim(ClaimTypeAddress, siweMessage.Address) ,
+                                                     new Claim(ClaimTypeNonce, siweMessage.Nonce),
+                                                     new Claim(ClaimTypeSignature, signature),
+                                                     new Claim(ClaimTypeSiweExpiry, siweMessage.ExpirationTime),
+                                                     new Claim(ClaimTypeSiweIssuedAt, siweMessage.IssuedAt),
+                                                     new Claim(ClaimTypeSiweNotBefore, siweMessage.NotBefore),
+                                            }),
+
+
+                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+            };
+            if (!string.IsNullOrEmpty(siweMessage.ExpirationTime))
+            {
+                tokenDescriptor.Expires = GetIso8602AsDateTime(siweMessage.ExpirationTime);
+            }
+            if (!string.IsNullOrEmpty(siweMessage.IssuedAt))
+            {
+                tokenDescriptor.IssuedAt = GetIso8602AsDateTime(siweMessage.IssuedAt);
+
+            }
+            if (!string.IsNullOrEmpty(siweMessage.NotBefore))
+            {
+                tokenDescriptor.NotBefore = GetIso8602AsDateTime(siweMessage.NotBefore);
+            }
+
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+            return tokenHandler.WriteToken(token);
+        }
+```
+
+### Validation of a JWT using the Middleware
+Here the validation is done for both the JWT and the SIWE message that is reconstructed with the values from the JWT and validated against the signature, and generic validations
+
+If wanted here other validations could be checked per request like ```IsUserAddressRegistered``` if checking the balance of an NFT or just simply user registration in a db.
+```csharp
+public async Task<SiweMessage> ValidateToken(string token)
+        {
+            if (token == null)
+                return null;
+
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var key = Encoding.ASCII.GetBytes(_appSettings.Secret);
+            try
+            {
+                tokenHandler.ValidateToken(token, new TokenValidationParameters
+                {
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(key),
+                    ValidateIssuer = false,
+                    ValidateAudience = false,
+                    // set clockskew to zero so tokens expire exactly at token expiration time (instead of 5 minutes later)
+                    ClockSkew = TimeSpan.Zero
+                }, out SecurityToken validatedToken);
+
+                var jwtToken = (JwtSecurityToken)validatedToken;
+                var address = jwtToken.Claims.First(x => x.Type == ClaimTypeAddress).Value;
+                var nonce = jwtToken.Claims.First(x => x.Type == ClaimTypeNonce).Value;
+                var issuedAt = jwtToken.Claims.First(x => x.Type == ClaimTypeSiweIssuedAt).Value;
+                var expiry = jwtToken.Claims.First(x => x.Type == ClaimTypeSiweExpiry).Value;
+                var notBefore = jwtToken.Claims.First(x => x.Type == ClaimTypeSiweNotBefore).Value;
 
 
 
+                var signature = jwtToken.Claims.First(x => x.Type == ClaimTypeSignature).Value;
 
+
+
+                var siweMessage = new DefaultSiweMessage
+                {
+                    Address = address,
+                    Nonce = nonce,
+                    ExpirationTime = expiry,
+                    IssuedAt = issuedAt,
+                    NotBefore = notBefore
+                };
+                //We could use the values stored in the jwt token but if NotBefore or Expiration are not set this will be defaulted
+                //and we may not want to expire and renew it
+                //also milliseconds are not set in the jwtToken so this causes a validation failure, for this to match milliseconds have to be zero
+
+                Debug.WriteLine(SiweMessageStringBuilder.BuildMessage(siweMessage));
+                if (await _siweMessageService.IsMessageSignatureValid(siweMessage, signature))
+                {
+                    if (_siweMessageService.IsMessageTheSameAsSessionStored(siweMessage))
+                    {
+                        if (_siweMessageService.HasMessageDateStartedAndNotExpired(siweMessage))
+                        {
+                            return siweMessage;
+                        }
+
+                    }
+                }
+
+                return null;
+            }
+            catch
+            {
+                // return null if validation fails
+                return null;
+            }
+        }
+    }
+```
 
 
 
