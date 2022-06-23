@@ -104,7 +104,7 @@ public IActionResult GenerateNewSiweMessage([FromBody] string address)
 }
 ````
 
-## Authenticating a User
+### Authenticating a User
 To authentication a user, the signed message will be sent to the Rest API. 
 In this example the whole message is validated as follows:
 
@@ -269,5 +269,158 @@ public async Task<SiweMessage> ValidateToken(string token)
     }
 ```
 
+## Blazor Wasm
+The template uses a basis Metamask as the unique Ethereum Host Provider, and is the one responsible to Sign the SIWE Message.
+When a user is connected to Metamask the user is presented with the option to Login, this first calls the rest Api to generate the SIWE message and assign a new Nonce, as seen in the Rest API. Then the user is prompted to sign the message as plain text returned from the server, once signed is submitted back to the rest api, which validates the message matches the one stored and signature, and then creates the JWT. The JWT is stored in the local storage and then reuse each time a call is make to the server. If the user disconnects from MM is automatically logout from the server and JWT removed from local storage.
 
+
+###  SiweAuthenticationWasmStateProvider
+The SiweAuthenticationWasmStateProvider is the extended version of EthereumAuthenticationStateProvider, the custom Ethereum Authentication State Provider used when an account is Connected creating the claims of "EthereumConnected" for that account.
+
+The SiweAuthenticationWasmStateProvider is responsible for the interaction with the RestApi to create the SiweMessages, Authentication and storage of JWTs using the provided IAccessTokenService. In this scenario we use the LocalStorageAccessTokenService https://github.com/Nethereum/Nethereum.Siwe-Template/blob/main/ExampleProjectSiwe.Wasm/Services/LocalStorageAccessTokenService.cs
+
+```csharp
+
+public async Task AuthenticateAsync(string address)
+{
+    if (EthereumHostProvider == null || !EthereumHostProvider.Available)
+    {
+        throw new Exception("Cannot authenticate user, an Ethereum host is not available");
+    }
+
+    var siweMessage = await _siweUserLoginService.GenerateNewSiweMessage(address);
+    var signedMessage = await EthereumHostProvider.SignMessageAsync(siweMessage);
+    await AuthenticateAsync(SiweMessageParser.Parse(siweMessage), signedMessage);
+}
+
+public async Task AuthenticateAsync(SiweMessage siweMessage, string signature)
+{
+    var authenticateResponse = await _siweUserLoginService.Authenticate(siweMessage, signature);
+    if (authenticateResponse.Jwt != null && authenticateResponse.Address.IsTheSameAddress(siweMessage.Address))
+    {
+        await _accessTokenService.SetAccessTokenAsync(authenticateResponse.Jwt);
+        await MarkUserAsAuthenticated();
+    }
+    else
+    {
+        throw new Exception("Invalid authentication response");
+    }
+
+}
+
+public async Task<SiweMessage> GenerateNewSiweMessage(string adddress)
+{
+    var message = await _siweUserLoginService.GenerateNewSiweMessage(adddress);
+    return SiweMessageParser.Parse(message);
+}
+
+public async Task MarkUserAsAuthenticated()
+{
+    var user = await GetUserAsync();
+    var claimsPrincipal = GenerateSiweClaimsPrincipal(user);
+
+    NotifyAuthenticationStateChanged(Task.FromResult(new AuthenticationState(claimsPrincipal)));
+}
+
+```
+
+####  ClaimsPrincipal
+
+The claims created after authentication are the following, "EthereumConnected" the same as in the EthereumAuthenticationStateProvider and  "SiweAuthenticated",
+the EthereumAddress is set as the NameIdentifier.
+
+```csharp
+private ClaimsPrincipal GenerateSiweClaimsPrincipal(User currentUser)
+{
+    //create a claims
+    var claimName = new Claim(ClaimTypes.Name, currentUser.UserName);
+    var claimEthereumAddress = new Claim(ClaimTypes.NameIdentifier, currentUser.EthereumAddress);
+    var claimEthereumConnectedRole = new Claim(ClaimTypes.Role, "EthereumConnected");
+    var claimSiweAuthenticatedRole = new Claim(ClaimTypes.Role, "SiweAuthenticated");
+
+    //create claimsIdentity
+    var claimsIdentity = new ClaimsIdentity(new[] { claimEthereumAddress, claimName, claimEthereumConnectedRole, claimSiweAuthenticatedRole }, "siweAuth");
+    //create claimsPrincipal
+    var claimsPrincipal = new ClaimsPrincipal(claimsIdentity);
+
+    return claimsPrincipal;
+}
+```
+
+#### Claims in Blazor
+An example on how to use the Claims in Blazor is the following, in which restrict access to the Erc20Transfer
+```xml
+       <AuthorizeView Roles="SiweAuthenticated">
+             <Authorized Context="siweAuth">
+                    <Erc20Transfer></Erc20Transfer>
+             </Authorized>
+        </AuthorizeView>
+```
+Or remove a link from the navigation
+```
+<div class="@NavMenuCssClass" @onclick="ToggleNavMenu">
+    <ul class="nav flex-column">
+        <li class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="oi oi-home" aria-hidden="true"></span> Home
+            </NavLink>
+        </li>
+        <AuthorizeView Roles="SiweAuthenticated">
+            <li class="nav-item px-3">
+                <NavLink class="nav-link" href="orders" Match="NavLinkMatch.All">
+                    <span class="oi oi-grid-four-up" aria-hidden="true"></span>My Orders
+                </NavLink>
+            </li>
+        </AuthorizeView>
+    </ul>
+</div>
+```
+
+## Blazor Server side
+The Blazor server side, it is much simpler as we don't require a RestApi for authentication, everything is part of the same application.
+The SiweAuthenticationServerStateProvider is responsible to orchestrate now with the NethereumSiweAuthenticatorService, which is part of the Nethereum.UI https://github.com/Nethereum/Nethereum/blob/master/src/Nethereum.UI/NethereumSiweAuthenticatorService.cs
+
+```
+     public async Task AuthenticateAsync(string address = null)
+        {
+            
+            if (EthereumHostProvider == null  || !EthereumHostProvider.Available)
+            {
+                throw new Exception("Cannot authenticate user, an Ethereum host is not available");
+            }
+
+            if (string.IsNullOrEmpty(address))
+            {
+                address = await EthereumHostProvider.GetProviderSelectedAccountAsync();
+            }
+            var siweMessage = new DefaultSiweMessage();
+            siweMessage.Address = address.ConvertToEthereumChecksumAddress();
+            siweMessage.SetExpirationTime(DateTime.Now.AddMinutes(10));
+            siweMessage.SetNotBefore(DateTime.Now);
+            var fullMessage = await nethereumSiweAuthenticatorService.AuthenticateAsync(siweMessage);
+            await _accessTokenService.SetAccessTokenAsync(SiweMessageStringBuilder.BuildMessage(fullMessage));
+            await MarkUserAsAuthenticated();
+        }
+
+```
+
+In this scenario we store directly the SiweMessage using the ProtectedSessionStorageAccessTokenService https://github.com/Nethereum/Nethereum.Siwe-Template/blob/main/ExampleProjectSiwe.Server/Services/ProtectedSessionStorageAccessTokenService.cs to maintain the FrontEnd session.
+And validation of the SiweMessage can be done when getting the AuthenticationState.
+
+```csharp
+public async override Task<AuthenticationState> GetAuthenticationStateAsync()
+        {
+            var currentUser = await GetUserAsync();
+
+            if (currentUser != null && currentUser.EthereumAddress != null)
+            {
+                var claimsPrincipal = GenerateSiweClaimsPrincipal(currentUser);
+                return new AuthenticationState(claimsPrincipal);
+            }
+            await _accessTokenService.RemoveAccessTokenAsync();
+            return await base.GetAuthenticationStateAsync();
+        }
+```
+
+# MAUI and Avalonia examples TBD
 
