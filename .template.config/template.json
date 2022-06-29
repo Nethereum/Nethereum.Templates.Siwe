@@ -1,7 +1,7 @@
 {
     "author": "Juan Blanco",
-    "classifications": [ "Nethereum", "SIWE", "Blazor", "RestApi" ],
-    "name": "Nethereum Blazor SIWE sample",
+    "classifications": [ "Nethereum", "SIWE", "Blazor", "Metamas", "RestApi" ],
+    "name": "Nethereum Blazor SIWE Wasm/Server/RestApi Projects",
     "tags": {
         "language": "C#"
     },
@@ -17,7 +17,7 @@
       }
     },
     "identity": "nethererum.siwe",
-    "shortName": "nethereumsiwe",
+    "shortName": "nethereum-siwe",
     "sourceName": "NethereumSiwe",
     "guids": [
         "{3133878D-33AA-465B-A468-200850EAC35E}",
