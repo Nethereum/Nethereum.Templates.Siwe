@@ -1,6 +1,6 @@
 {
     "author": "Juan Blanco",
-    "classifications": [ "Nethereum", "SIWE", "Blazor", "Metamas", "RestApi" ],
+    "classifications": [ "Nethereum", "SIWE", "Blazor", "Metamask", "RestApi" ],
     "name": "Nethereum Blazor SIWE Wasm/Server/RestApi Projects",
     "tags": {
         "language": "C#"
