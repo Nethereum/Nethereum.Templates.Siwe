@@ -32,7 +32,6 @@ namespace ExampleProjectSiwe.Server
 
 
             services.AddScoped<IMetamaskInterop, MetamaskBlazorInterop>();
-            services.AddScoped<MetamaskInterceptor>();
             services.AddScoped<MetamaskHostProvider>();
             //Add metamask as the selected ethereum host provider
             services.AddScoped(services =>

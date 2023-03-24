@@ -32,7 +32,6 @@ namespace ExampleProjectSiwe.Wasm
             var inMemorySessionNonceStorage = new InMemorySessionNonceStorage();
             builder.Services.AddSingleton<ISessionStorage>(x => inMemorySessionNonceStorage);
             builder.Services.AddSingleton<IMetamaskInterop, MetamaskBlazorInterop>();
-            builder.Services.AddSingleton<MetamaskInterceptor>();
             builder.Services.AddSingleton<MetamaskHostProvider>();
             //Add metamask as the selected ethereum host provider
             builder.Services.AddSingleton(services =>
