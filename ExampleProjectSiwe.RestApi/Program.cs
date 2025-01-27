@@ -8,6 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 var services = builder.Services;
 
 services.AddControllers();
+services.AddOpenApi();
 
 services.Configure<AppSettings>(builder.Configuration.GetSection("AppSettings"));
 
@@ -18,6 +19,10 @@ services.AddScoped<ISessionStorage>(x => inMemorySessionNonceStorage);
 services.AddScoped(x => new SiweMessageService(inMemorySessionNonceStorage, null, null));
 services.AddScoped<ISiweJwtAuthorisationService, SiweJwtAuthorisationService>();
 var app = builder.Build();
+
+app.MapOpenApi();
+app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "Swagger"));
+
 
 // Configure the HTTP request pipeline.
 

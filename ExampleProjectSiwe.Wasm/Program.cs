@@ -28,7 +28,7 @@ namespace ExampleProjectSiwe.Wasm
 
             //builder.Services.AddSingleton(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
             //for the rest api
-            builder.Services.AddSingleton(sp => new HttpClient { BaseAddress = new Uri("http://localhost:59909") });
+            builder.Services.AddSingleton(sp => new HttpClient { BaseAddress = new Uri("http://localhost:59909/") });
 
             var inMemorySessionNonceStorage = new InMemorySessionNonceStorage();
             builder.Services.AddSingleton<ISessionStorage>(x => inMemorySessionNonceStorage);
